@@ -1,0 +1,20 @@
+[appender.stdout]
+kind = "console"
+
+[appender.debug]
+kind = "file"
+path = "debug.log"
+
+[root]
+level = "warn"
+#level = "debug"
+appenders = ["stdout"]
+
+[[logger]]
+name = "archer"
+level = "info"
+#level = "warn"
+
+[[logger]]
+name = "html5ever"
+level = "error"
