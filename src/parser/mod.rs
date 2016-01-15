@@ -13,7 +13,7 @@ mod css;
 mod html;
 
 
-pub fn task_parse_resource(wid: WebsiteID, mut data: Response, resource: bool, queues: Queues) {
+pub fn task_parse_resource(wid: WebsiteID, mut data: Response, is_resource: bool, queues: Queues) {
     debug!("Parse Resource");
 
     let content_type: Option<ContentType> = data.headers.get().cloned();
@@ -27,7 +27,7 @@ pub fn task_parse_resource(wid: WebsiteID, mut data: Response, resource: bool, q
             css::explore_css(&mut data, &base_url, queues.clone())
         }
         _ => vec![], // No more exploring, just store in DB
-
+        // FIXME: Avoid allocation if no explorations done
     };
 
     // Create new download tasks
@@ -40,10 +40,10 @@ pub fn task_parse_resource(wid: WebsiteID, mut data: Response, resource: bool, q
         })
     }
 
-    // Tell the main
+    // Tell the main event handler we're done with processing
     queues.send_event(Event::DownloadProcessed {
         wid: wid,
-        resource: resource,
+        resource: is_resource,
         explored: explored_resources.len() as i32,
     });
 }

@@ -7,19 +7,6 @@ use Queues;
 use parser::resolve_rel_url;
 
 
-// struct RuleParser;
-//
-// impl QualifiedRuleParser for RuleParser {
-//    type Prelude = ();
-//    type QualifiedRule = ();
-// }
-//
-// impl AtRuleParser for RuleParser {
-//    type Prelude = ();
-//    type AtRule = ();
-// }
-
-
 pub fn explore_css<R: Read>(data: &mut R, base: &Url, _: Queues) -> Vec<Url> {
     let mut input = String::new();
     data.read_to_string(&mut input).unwrap();  // FIXME: Error handling
@@ -59,8 +46,6 @@ fn parse_css<'i, 't>(parser: &mut Parser<'i, 't>, base: &Url) -> Result<Vec<Url>
         }
 
         trace!("Processing CSS token {:?}", token);
-
-        // FIXME: This parser skips over all blocks!
 
         let url = match token {
             Token::UnquotedUrl(url) => {

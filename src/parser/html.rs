@@ -34,7 +34,7 @@ macro_rules! html_rule {
 
 #[derive(Debug)]
 struct HTMLRule {
-    /// Which attributes are required for the rule to match
+    /// Which attributes are required for the rule to match (logical OR)
     required: &'static [(&'static str, &'static str)],
 
     /// The source of the explored resource
@@ -67,10 +67,10 @@ static HTML_RULES: phf::Map<&'static str, HTMLRule> = phf_map! {
 
 
 pub fn explore_html(data: &mut Response, queues: Queues) -> Vec<Url> {
+    // FIXME: Figure out error handling. What does Servo do?
     let mut input = ByteTendril::new();
     data.read_to_tendril(&mut input).unwrap();
-
-    let input = input.try_reinterpret().unwrap();  // FIXME: Figure out error handling. What does Servo do?
+    let input = input.try_reinterpret().unwrap();
     let dom: RcDom = html5ever::parse(one_input(input), Default::default());
 
     let explorer = HTMLExplorer::new(dom, &data.url, queues);
@@ -147,8 +147,9 @@ impl<'a> HTMLExplorer<'a> {
             trace!("HTML rule: {:?}", HTML_RULES.get(&*name.local));
 
             if let Some(rule) = HTML_RULES.get(&*name.local) {
+                // If there are no required attrs, we're done:
+                let mut required_attr_found = rule.required.len() == 0;
                 let mut source: Option<String> = None;
-                let mut required_attr_found = rule.required.len() == 0;  // If there are no required attrs, we're done
 
                 // Process attributes
                 for attr in attrs.iter_mut() {
