@@ -27,7 +27,6 @@ extern crate url;
 
 use std::collections::HashMap;
 use std::thread;
-use std::sync::RwLock;
 
 use event::Event;
 use model::{Website, State, WebsiteID};
@@ -108,7 +107,7 @@ fn main() {
         })
     }
 
-    let websites = RwLock::new(websites);
+    // let mut websites = websites;
 
     // Set up worker pool
     let mut threads: Vec<_> = vec![];
@@ -142,47 +141,33 @@ fn main() {
         threads.push(thread.unwrap());
     }
 
-    // Small helper for event handler
-    let quit_if_done = || {
-        let websites = websites.read().unwrap();
-
-        trace!("quit_if_done - websites: {:?}", *websites);
-
-        if websites.values().all(|w| w.state != State::InProgress) {
-            debug!("all websites done/failed");
-
-            for _ in 0..thread_count {
-                // Terminate all tasks
-                task_tx.send(Task::Terminate);
-                evt_tx.send(Event::Terminate);
-            }
-        }
-    };
-
     // Event handler (main thread)
     for event in evt_rx.iter() {
         debug!("Handling event: {:?}", event);
 
         match event {
             Event::DownloadProcessed { wid, resource, explored } => {
-                {
-                    let mut websites = websites.write().unwrap();
-                    let mut website = websites.get_mut(&wid)
-                                              .expect("Invalid website ID");
+                let mut website = websites.get_mut(&wid)
+                                          .expect("Invalid website ID");
 
-                    // If the website hasn't been explored yet and there
-                    // are no resources, we're done.
-                    if !resource && website.explored == false && explored == 0 {
+                if resource {
+                    debug_assert!(website.explored);
+
+                    website.resources_downloaded += 1;
+                }
+
+                match (resource, explored) {
+                    (false, 0) => {
+                        // No resources explored on this website. We're done
+                        assert!(!resource);
+
                         website.state = State::Done;
-
                         info!("Site {} downloaded", website.url);
-                    } else {
-                        // Otherwise update explored resources count
+                    }
+                    (_, _) => {
+                        // There are explored resources on this website/resource
                         website.explored = true;
                         website.resources_explored += explored;
-                        if resource {
-                            website.resources_downloaded += 1;
-                        }
 
                         // Update the website state if all resources are downloaded
                         if website.resources_explored == website.resources_downloaded {
@@ -192,28 +177,30 @@ fn main() {
                         }
                     }
                 }
-
-                // Check if we're done
-                quit_if_done();
             }
             Event::DownloadFailed { wid, url } => {
-                {
-                    let mut websites = websites.write().unwrap();
-                    let mut website = websites.get_mut(&wid)
-                                              .expect("Invalid website ID");
+                let mut website = websites.get_mut(&wid)
+                                          .expect("Invalid website ID");
 
-                    // Update the website state
-                    website.state = State::Failed;
+                // Update the website state
+                website.state = State::Failed;
 
-                    warn!("Downloading {} failed, couldn't download {}",
-                          website.url,
-                          url);
-                }
-
-                // Check if we're done
-                quit_if_done();
+                warn!("Downloading {} failed, couldn't download {}",
+                      website.url,
+                      url);
             }
             Event::Terminate => break,
+        }
+
+        // Check wheter we're done
+        if websites.values().all(|w| w.state != State::InProgress) {
+            debug!("all websites done/failed");
+
+            for _ in 0..thread_count {
+                // Terminate all tasks
+                task_tx.send(Task::Terminate);
+                evt_tx.send(Event::Terminate);
+            }
         }
     }
 

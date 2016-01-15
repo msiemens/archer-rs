@@ -20,6 +20,8 @@ thread_local!(static HTTP: Client = Client::new());
 
 
 pub fn task_download(wid: WebsiteID, url: String, retries: i32, resource: bool, queues: Queues) {
+    // FIXME: Handling of redirects
+    // FIXME: Handling of gzipped content
     // TODO: Add user-agent header
     // TODO: robots.txt handling
     if resource {
