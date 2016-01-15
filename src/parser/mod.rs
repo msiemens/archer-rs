@@ -1,3 +1,5 @@
+use crypto::digest::Digest;
+use crypto::md5::Md5;
 use hyper::client::Response;
 use hyper::header::ContentType;
 use mime::{self, Mime};
@@ -11,6 +13,31 @@ use task::Task;
 
 mod css;
 mod html;
+
+
+fn rewrite_url(url: &Url) -> String {
+    let filename = url.path().and_then(|parts| parts.last());
+    let extension = filename.and_then(|f| {
+        if f.contains('.') {
+            f.rsplitn(2, ".").next()
+        } else {
+            None
+        }
+    });
+
+    let mut md5 = Md5::new();
+    md5.input_str(&url.serialize());
+    let mut rewritten = md5.result_str();
+
+    if let Some(ref ext) = extension {
+        rewritten.push('.');
+        rewritten.push_str(ext);
+    }
+
+    debug!("Rewriting {} to {}", url, rewritten);
+
+    rewritten
+}
 
 
 pub fn task_parse_resource(wid: WebsiteID, mut data: Response, is_resource: bool, queues: Queues) {

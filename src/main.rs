@@ -8,6 +8,7 @@
 #![plugin(phf_macros)]
 
 extern crate chan;
+extern crate crypto;
 extern crate cssparser;
 extern crate html5ever;
 extern crate hyper;

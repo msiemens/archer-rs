@@ -1,6 +1,6 @@
 use std::mem;
 
-use html5ever::{self, one_input, Attribute};
+use html5ever::{self, one_input, serialize, Attribute};
 use html5ever::rcdom::{Element, Handle, RcDom};
 use hyper::client::Response;
 use phf;
@@ -8,8 +8,7 @@ use tendril::{ByteTendril, ReadExt};
 use url::Url;
 
 use Queues;
-use parser::css;
-use parser::resolve_rel_url;
+use parser::{css, resolve_rel_url, rewrite_url};
 
 
 macro_rules! html_rule {
@@ -98,27 +97,23 @@ impl<'a> HTMLExplorer<'a> {
     }
 
     fn explore(mut self) -> Vec<Url> {
+        //use std::io;
+
         let root = self.dom.document.clone();
         self.walk_dom(root);
 
         // FIXME: Store rewritten HTML
+        //serialize(&mut io::stdout(), &self.dom.document, Default::default());
 
         self.explored_resources
     }
 
-    // FIXME: This is way too complex...
     fn walk_dom(&mut self, handle: Handle) {
         let mut node = handle.borrow_mut();
 
         if let Element(ref name, _, ref mut attrs) = node.node {
             trace!("Processing HTML element name={:?} attrs={:?}", name, attrs);
 
-            // Handle <base> tags
-            // See HTML spec 4.2.3
-            // - A base element, if it has an href attribute, must come before any other elements
-            //   in the tree that have attributes defined as taking URLs
-            // - If there are multiple base elements with href attributes, all but the first are
-            //   ignored.
             if self.html_base.is_none() && &*name.local == "base" {
                 self.handle_base_tag(attrs);
             }
@@ -142,6 +137,13 @@ impl<'a> HTMLExplorer<'a> {
         }
     }
 
+    /// Handle <base> tags
+    ///
+    /// See HTML spec 4.2.3
+    /// - A base element, if it has an href attribute, must come before any other elements
+    ///   in the tree that have attributes defined as taking URLs
+    /// - If there are multiple base elements with href attributes, all but the first are
+    ///   ignored.
     fn handle_base_tag(&mut self, attrs: &[Attribute]) {
         // Search for "href" attribute and set html_base if found
         if let Some(attr) = attrs.iter()
@@ -152,6 +154,8 @@ impl<'a> HTMLExplorer<'a> {
                       &*attr.value,
                       self.get_base())
             }
+
+            // FIXME: Rewrite URL. What directory to use?
 
             mem::replace(&mut self.html_base, base);
         }
@@ -167,35 +171,45 @@ impl<'a> HTMLExplorer<'a> {
     fn handle_html_rule(&mut self, rule: &HTMLRule, name: &str, attrs: &mut [Attribute]) {
         // If there are no required attrs, we're done:
         let mut required_attr_found = rule.required.len() == 0;
-        let mut source: Option<String> = None;
+        let mut source_idx: Option<usize> = None;
 
         // Process attributes
-        for attr in attrs.iter_mut() {
-            if rule.sources.contains(&name) {
-                source = Some((&*attr.value).into());
-                // FIXME: Rewrite URL
-                // mem::replace(&mut attr.value, StrTendril::from_slice(""));
+        for (idx, attr) in attrs.iter().enumerate() {
+            let attr_name = &*attr.name.local;
+            let attr_value = &*attr.name.local;
+
+            if rule.sources.contains(&attr_name) {
+                source_idx = Some(idx);
             }
 
             // Make sure one of the required attributes is there
             required_attr_found |= rule.required
                                        .iter()
                                        .any(|&(required_attr, required_value)| {
-                                           &*attr.name.local == required_attr &&
-                                           &*attr.value == required_value
+                                           attr_name == required_attr &&
+                                           attr_value == required_value
                                        });
 
-            if source.is_some() && required_attr_found {
+            if source_idx.is_some() && required_attr_found {
                 break;  // Skip other attributes
             }
         }
 
-        if let Some(source) = source {
+        if let Some(source_idx) = source_idx {
             if required_attr_found {
+                let attr = &mut attrs[source_idx];
+                let source: String = (&*attr.value).into();
+
                 debug!("New source from <{}>: {:?}", name, source);
 
                 match self.resolve_url(&source) {
-                    Some(url) => self.explored_resources.push(url),
+                    Some(url) => {
+                        // Rewrite URL
+                        mem::replace(&mut attr.value, rewrite_url(&url).into());
+
+                        // Update explored resources
+                        self.explored_resources.push(url);
+                    }
                     None => {
                         warn!("Failed to resolve URL {} with respect to {}",
                               source,
