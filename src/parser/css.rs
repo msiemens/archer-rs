@@ -13,16 +13,12 @@ pub fn explore_css<R: Read>(data: &mut R, base: &Url, _: Queues) -> Vec<Url> {
 
     let mut parser = Parser::new(&input);
 
-    // TODO:
-    // - Skip until AtKeyword or UnquotedUrl, expect_url_or_string
-    // - Add URL to download list
-    // - Store rewritten CSS
+    // TODO: Store rewritten CSS
 
     parse_css(&mut parser, base).unwrap()
 }
 
 
-// fn parse_css(parser: Parser) -> Result<Vec<Url>, ()> {
 fn parse_css<'i, 't>(parser: &mut Parser<'i, 't>, base: &Url) -> Result<Vec<Url>, ()> {
     let mut urls = Vec::new();
 

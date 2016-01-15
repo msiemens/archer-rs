@@ -12,8 +12,8 @@ appenders = ["stdout"]
 
 [[logger]]
 name = "archer"
-level = "info"
-#level = "warn"
+#level = "info"
+level = "warn"
 
 [[logger]]
 name = "html5ever"

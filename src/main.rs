@@ -25,11 +25,9 @@ extern crate time;
 extern crate url;
 
 
-use std::collections::HashMap;
 use std::thread;
 
 use event::Event;
-use model::{Website, State, WebsiteID};
 use task::Task;
 
 
@@ -37,12 +35,9 @@ mod download;
 mod event;
 mod model;
 mod parser;
+mod storage;
 mod task;
 
-
-const SITES: [&'static str; 3] = ["http://m-siemens.de",
-                                  "http://blog.m-siemens.de",
-                                  "http://rust-lang.org/"];
 
 pub type EventQueue = chan::Sender<Event>;
 pub type TaskQueue = chan::Sender<Task>;
@@ -71,7 +66,6 @@ impl Queues {
 }
 
 
-// FIXME: Split this up!
 fn main() {
     log4rs::init_file("logging.toml", Default::default()).unwrap();
     debug!("Starting up");
@@ -82,17 +76,7 @@ fn main() {
 
     // Set up website map
     // TODO: Replace with db access
-    let mut websites = HashMap::new();
-    for (i, website) in SITES.iter().enumerate() {
-        websites.insert(WebsiteID::new(i as i32),
-                        Website {
-                            url: (*website).into(),
-                            resources_explored: 0,
-                            resources_downloaded: 0,
-                            state: State::InProgress,
-                            explored: false,
-                        });
-    }
+    let websites = storage::load_queued();
 
 
     // Fill queue with initial tasks
@@ -107,13 +91,9 @@ fn main() {
         })
     }
 
-    // let mut websites = websites;
-
     // Set up worker pool
     let mut threads: Vec<_> = vec![];
     let evt_rx = evt_rx.clone();
-
-
 
     // FIXME: Make configurable
     // let thread_count = 1;
@@ -141,68 +121,7 @@ fn main() {
         threads.push(thread.unwrap());
     }
 
-    // Event handler (main thread)
-    for event in evt_rx.iter() {
-        debug!("Handling event: {:?}", event);
-
-        match event {
-            Event::DownloadProcessed { wid, resource, explored } => {
-                let mut website = websites.get_mut(&wid)
-                                          .expect("Invalid website ID");
-
-                if resource {
-                    debug_assert!(website.explored);
-
-                    website.resources_downloaded += 1;
-                }
-
-                match (resource, explored) {
-                    (false, 0) => {
-                        // No resources explored on this website. We're done
-                        assert!(!resource);
-
-                        website.state = State::Done;
-                        info!("Site {} downloaded", website.url);
-                    }
-                    (_, _) => {
-                        // There are explored resources on this website/resource
-                        website.explored = true;
-                        website.resources_explored += explored;
-
-                        // Update the website state if all resources are downloaded
-                        if website.resources_explored == website.resources_downloaded {
-                            website.state = State::Done;
-
-                            info!("Site {} downloaded", website.url);
-                        }
-                    }
-                }
-            }
-            Event::DownloadFailed { wid, url } => {
-                let mut website = websites.get_mut(&wid)
-                                          .expect("Invalid website ID");
-
-                // Update the website state
-                website.state = State::Failed;
-
-                warn!("Downloading {} failed, couldn't download {}",
-                      website.url,
-                      url);
-            }
-            Event::Terminate => break,
-        }
-
-        // Check wheter we're done
-        if websites.values().all(|w| w.state != State::InProgress) {
-            debug!("all websites done/failed");
-
-            for _ in 0..thread_count {
-                // Terminate all tasks
-                task_tx.send(Task::Terminate);
-                evt_tx.send(Event::Terminate);
-            }
-        }
-    }
+    event::event_handler(evt_rx, Queues::new(task_tx, evt_tx), websites, thread_count);
 
     // FIXME: Add thread with current state (# of downloads, resources, ...)
 

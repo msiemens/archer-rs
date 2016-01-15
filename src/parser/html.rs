@@ -1,7 +1,7 @@
 use std::mem;
 
-use html5ever::{self, one_input};
-use html5ever::rcdom::{Handle, RcDom};
+use html5ever::{self, one_input, Attribute};
+use html5ever::rcdom::{Element, Handle, RcDom};
 use hyper::client::Response;
 use phf;
 use tendril::{ByteTendril, ReadExt};
@@ -110,7 +110,7 @@ impl<'a> HTMLExplorer<'a> {
     fn walk_dom(&mut self, handle: Handle) {
         let mut node = handle.borrow_mut();
 
-        if let html5ever::rcdom::Element(ref name, _, ref mut attrs) = node.node {
+        if let Element(ref name, _, ref mut attrs) = node.node {
             trace!("Processing HTML element name={:?} attrs={:?}", name, attrs);
 
             // Handle <base> tags
@@ -120,79 +120,91 @@ impl<'a> HTMLExplorer<'a> {
             // - If there are multiple base elements with href attributes, all but the first are
             //   ignored.
             if self.html_base.is_none() && &*name.local == "base" {
-                // Search for "href" attribute and set html_base if found
-                if let Some(attr) = attrs.iter()
-                                         .find(|attr| &*(attr.name.local) == "href") {
-                    let base = self.resolve_url(&*attr.value);
-                    if base.is_none() {
-                        warn!("Failed to resolve <base href=\"{}\"> with respect to {}",
-                              &*attr.value,
-                              self.get_base())
-                    }
-
-                    mem::replace(&mut self.html_base, base);
-                }
+                self.handle_base_tag(attrs);
             }
 
             // Handle inline styles
             for attr in attrs.iter()
                              .filter(|attr| &*attr.name.local == "style") {
-                let new_urls = css::explore_css(&mut (*attr.value).as_bytes(),
-                                                self.get_base(),
-                                                self.queues.clone());
-                self.explored_resources.extend(new_urls.into_iter());
+                self.handle_inline_styles(attr);
             }
 
             // Handle HTML exploration rules
             trace!("HTML rule: {:?}", HTML_RULES.get(&*name.local));
 
             if let Some(rule) = HTML_RULES.get(&*name.local) {
-                // If there are no required attrs, we're done:
-                let mut required_attr_found = rule.required.len() == 0;
-                let mut source: Option<String> = None;
-
-                // Process attributes
-                for attr in attrs.iter_mut() {
-                    if rule.sources.contains(&&*attr.name.local) {
-                        source = Some((&*attr.value).into());
-                        // FIXME: Rewrite URL
-                        // mem::replace(&mut attr.value, StrTendril::from_slice(""));
-                    }
-
-                    // Make sure one of the required attributes is there
-                    required_attr_found |= rule.required
-                                               .iter()
-                                               .any(|&(required_attr, required_value)| {
-                                                   &*attr.name.local == required_attr &&
-                                                   &*attr.value == required_value
-                                               });
-
-                    if source.is_some() && required_attr_found {
-                        break;  // Skip other attributes
-                    }
-                }
-
-                if let Some(source) = source {
-                    if required_attr_found {
-                        debug!("New source from <{}>: {:?}", name.local, source);
-
-                        match self.resolve_url(&source) {
-                            Some(url) => self.explored_resources.push(url),
-                            None => {
-                                warn!("Failed to resolve URL {} with respect to {}",
-                                      source,
-                                      self.get_base())
-                            }
-                        }
-                    } else {
-                        trace!("Skipping element since required attribtes are not found")
-                    }
-                }
+                self.handle_html_rule(rule, &*name.local, attrs);
             }
         }
 
         for child in &node.children {
             self.walk_dom(child.clone());
+        }
+    }
+
+    fn handle_base_tag(&mut self, attrs: &[Attribute]) {
+        // Search for "href" attribute and set html_base if found
+        if let Some(attr) = attrs.iter()
+                                 .find(|attr| &*(attr.name.local) == "href") {
+            let base = self.resolve_url(&*attr.value);
+            if base.is_none() {
+                warn!("Failed to resolve <base href=\"{}\"> with respect to {}",
+                      &*attr.value,
+                      self.get_base())
+            }
+
+            mem::replace(&mut self.html_base, base);
+        }
+    }
+
+    fn handle_inline_styles(&mut self, attr: &Attribute) {
+        let new_urls = css::explore_css(&mut (*attr.value).as_bytes(),
+                                        self.get_base(),
+                                        self.queues.clone());
+        self.explored_resources.extend(new_urls.into_iter());
+    }
+
+    fn handle_html_rule(&mut self, rule: &HTMLRule, name: &str, attrs: &mut [Attribute]) {
+        // If there are no required attrs, we're done:
+        let mut required_attr_found = rule.required.len() == 0;
+        let mut source: Option<String> = None;
+
+        // Process attributes
+        for attr in attrs.iter_mut() {
+            if rule.sources.contains(&name) {
+                source = Some((&*attr.value).into());
+                // FIXME: Rewrite URL
+                // mem::replace(&mut attr.value, StrTendril::from_slice(""));
+            }
+
+            // Make sure one of the required attributes is there
+            required_attr_found |= rule.required
+                                       .iter()
+                                       .any(|&(required_attr, required_value)| {
+                                           &*attr.name.local == required_attr &&
+                                           &*attr.value == required_value
+                                       });
+
+            if source.is_some() && required_attr_found {
+                break;  // Skip other attributes
+            }
+        }
+
+        if let Some(source) = source {
+            if required_attr_found {
+                debug!("New source from <{}>: {:?}", name, source);
+
+                match self.resolve_url(&source) {
+                    Some(url) => self.explored_resources.push(url),
+                    None => {
+                        warn!("Failed to resolve URL {} with respect to {}",
+                              source,
+                              self.get_base())
+                    }
+                }
+            } else {
+                trace!("Skipping element since required attribtes are not found")
+            }
         }
     }
 

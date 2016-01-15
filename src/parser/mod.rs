@@ -27,7 +27,6 @@ pub fn task_parse_resource(wid: WebsiteID, mut data: Response, is_resource: bool
             css::explore_css(&mut data, &base_url, queues.clone())
         }
         _ => vec![], // No more exploring, just store in DB
-        // FIXME: Avoid allocation if no explorations done
     };
 
     // Create new download tasks
