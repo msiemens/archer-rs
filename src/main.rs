@@ -70,6 +70,7 @@ impl Queues {
 fn main() {
     log4rs::init_file("logging.toml", Default::default()).unwrap();
     debug!("Starting up");
+    let start_time = time::now();
 
     // Set up thread communication
     let (task_tx, task_rx) = chan::async();
@@ -131,5 +132,34 @@ fn main() {
         thread.join().unwrap();
     }
 
-    println!("Done");
+    print!("Done. Run time: ");
+    print_duration(time::now() - start_time);
+}
+
+
+fn print_duration(duration: time::Duration) {
+    let days = duration.num_days();
+    let mut hours = duration.num_hours();
+    let mut minutes = duration.num_minutes();
+    let mut seconds = duration.num_seconds();
+
+    if days > 0 {
+        print!("{}d ", days);
+        hours -= days * 24;
+        minutes -= hours * 60 * 24;
+        seconds -= seconds * 60 * 60 * 24;
+    }
+
+    if hours > 0 {
+        print!("{}h ", hours);
+        minutes -= hours * 60;
+        seconds -= seconds * 60 * 60;
+    }
+
+    if minutes > 0 {
+        print!("{}h ", minutes);
+        seconds -= seconds * 60;
+    }
+
+    println!("{}s", seconds);
 }
