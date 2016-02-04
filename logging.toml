@@ -8,7 +8,7 @@ path = "debug.log"
 [root]
 level = "warn"
 #level = "debug"
-appenders = ["stdout"]
+appenders = ["stdout", "debug"]
 
 [[logger]]
 name = "archer"

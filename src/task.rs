@@ -4,11 +4,13 @@ use std::thread;
 use hyper::client::Response;
 use mime::Mime;
 use time::Timespec;
+use url::Url;
 
 use Queues;
 use download::task_download;
 use model::WebsiteID;
 use parser;
+use storage;
 
 
 pub enum Task {
@@ -25,8 +27,9 @@ pub enum Task {
     },
     Store {
         wid: WebsiteID,
+        url: Url,
         contents: Vec<u8>,
-        mime: Mime,
+        mime: Option<Mime>,
         timestamp: Timespec,
     },
     Terminate,
@@ -51,10 +54,11 @@ impl fmt::Debug for Task {
                    .field("resource", &resource)
                    .finish()
             }
-            Task::Store { ref wid, ref contents, ref mime, ref timestamp } => {
+            Task::Store { ref wid, ref url, ref contents, ref mime, ref timestamp } => {
                 fmt.debug_struct("Task::Store")
                    .field("wid", &wid)
-                   .field("contents", &contents)
+                   .field("url", &format!("{}", url))
+                   .field("contents", &format!("Vec<u8>(len={})", contents.len()))
                    .field("mime", &mime)
                    .field("timestamp", &timestamp)
                    .finish()
@@ -80,7 +84,9 @@ pub fn dispatch_task(task: Task, queues: Queues) {
         Task::ParseResource { wid, data, resource } => {
             parser::task_parse_resource(wid, data, resource, queues)
         }
-        Task::Store { .. } => unimplemented!(),
+        Task::Store { wid, url, contents, mime, timestamp } => {
+            storage::store_resource(wid, url, contents, mime, timestamp, queues)
+        }
         Task::Terminate => panic!("Should never be reached"),
     }
 }

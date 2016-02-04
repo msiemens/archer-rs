@@ -23,5 +23,6 @@ pub struct Website {
     pub explored: bool,
     pub resources_explored: i32,
     pub resources_downloaded: i32,
+    pub resources_stored: i32,
     pub state: State,
 }

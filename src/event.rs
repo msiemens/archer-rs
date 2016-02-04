@@ -14,6 +14,9 @@ pub enum Event {
         resource: bool,
         explored: i32,
     },
+    DownloadStored {
+        wid: WebsiteID,
+    },
     DownloadFailed {
         wid: WebsiteID,
         url: String,
@@ -32,6 +35,7 @@ pub fn event_handler(evt_rx: chan::Receiver<Event>,
         debug!("Handling event: {:?}", event);
 
         match event {
+            // FIXME: Only exit when data has been stored!?
             Event::DownloadProcessed { wid, resource, explored } => {
                 let mut website = websites.get_mut(&wid)
                                           .expect("Invalid website ID");
@@ -55,13 +59,20 @@ pub fn event_handler(evt_rx: chan::Receiver<Event>,
                         website.explored = true;
                         website.resources_explored += explored;
 
-                        // Update the website state if all resources are downloaded
                         if website.resources_explored == website.resources_downloaded {
-                            website.state = State::Done;
-
                             info!("Site {} downloaded", website.url);
                         }
                     }
+                }
+            }
+            Event::DownloadStored { wid } => {
+                let mut website = websites.get_mut(&wid)
+                                          .expect("Invalid website ID");
+
+                // Update the website state if all resources are downloaded and stored
+                if website.resources_explored == website.resources_downloaded &&
+                   website.resources_explored == website.resources_stored {
+                    website.state = State::Done;
                 }
             }
             Event::DownloadFailed { wid, url } => {

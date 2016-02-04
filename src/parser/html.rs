@@ -3,12 +3,17 @@ use std::mem;
 use html5ever::{self, one_input, serialize, Attribute};
 use html5ever::rcdom::{Element, Handle, RcDom};
 use hyper::client::Response;
+use hyper::header::ContentType;
+use mime::Mime;
 use phf;
 use tendril::{ByteTendril, ReadExt};
+use time;
 use url::Url;
 
 use Queues;
+use model::WebsiteID;
 use parser::{css, resolve_rel_url, rewrite_url};
+use task::Task;
 
 
 macro_rules! html_rule {
@@ -65,31 +70,44 @@ static HTML_RULES: phf::Map<&'static str, HTMLRule> = phf_map! {
 };
 
 
-pub fn explore_html(data: &mut Response, queues: Queues) -> Vec<Url> {
+pub fn explore_html(wid: WebsiteID, data: &mut Response, queues: Queues) -> Vec<Url> {
     // FIXME: Figure out error handling. What does Servo do?
     let mut input = ByteTendril::new();
     data.read_to_tendril(&mut input).unwrap();
     let input = input.try_reinterpret().unwrap();
     let dom: RcDom = html5ever::parse(one_input(input), Default::default());
 
-    let explorer = HTMLExplorer::new(dom, &data.url, queues);
+    let explorer = HTMLExplorer::new(wid,
+                                     dom,
+                                     &data.url,
+                                     data.headers.get().cloned().map(|t: ContentType| t.0),
+                                     queues);
     explorer.explore()
 }
 
 
 struct HTMLExplorer<'a> {
+    wid: WebsiteID,
     dom: RcDom,
-    request_url: &'a Url,
+    response_url: &'a Url,
+    mime: Option<Mime>,
     html_base: Option<Url>,
     explored_resources: Vec<Url>,
     queues: Queues,
 }
 
 impl<'a> HTMLExplorer<'a> {
-    fn new(dom: RcDom, request_url: &Url, queues: Queues) -> HTMLExplorer {
+    fn new(wid: WebsiteID,
+           dom: RcDom,
+           response_url: &Url,
+           mime: Option<Mime>,
+           queues: Queues)
+           -> HTMLExplorer {
         HTMLExplorer {
+            wid: wid,
             dom: dom,
-            request_url: request_url,
+            response_url: response_url,
+            mime: mime,
             html_base: None,
             explored_resources: Vec::new(),
             queues: queues,
@@ -97,13 +115,20 @@ impl<'a> HTMLExplorer<'a> {
     }
 
     fn explore(mut self) -> Vec<Url> {
-        //use std::io;
-
         let root = self.dom.document.clone();
         self.walk_dom(root);
 
         // FIXME: Store rewritten HTML
-        //serialize(&mut io::stdout(), &self.dom.document, Default::default());
+        let mut contents = Vec::new();
+        serialize(&mut contents, &self.dom.document, Default::default()).unwrap();
+
+        self.queues.send_task(Task::Store {
+            wid: self.wid,
+            url: self.response_url.clone(),
+            contents: contents,
+            mime: self.mime,
+            timestamp: time::get_time(),
+        });
 
         self.explored_resources
     }
@@ -162,7 +187,8 @@ impl<'a> HTMLExplorer<'a> {
     }
 
     fn handle_inline_styles(&mut self, attr: &Attribute) {
-        let new_urls = css::explore_css(&mut (*attr.value).as_bytes(),
+        let new_urls = css::explore_css(self.wid,
+                                        &mut (*attr.value).as_bytes(),
                                         self.get_base(),
                                         self.queues.clone());
         self.explored_resources.extend(new_urls.into_iter());
@@ -176,7 +202,7 @@ impl<'a> HTMLExplorer<'a> {
         // Process attributes
         for (idx, attr) in attrs.iter().enumerate() {
             let attr_name = &*attr.name.local;
-            let attr_value = &*attr.name.local;
+            let attr_value = &*attr.value;
 
             if rule.sources.contains(&attr_name) {
                 source_idx = Some(idx);
@@ -219,6 +245,8 @@ impl<'a> HTMLExplorer<'a> {
             } else {
                 trace!("Skipping element since required attribtes are not found")
             }
+        } else {
+            trace!("Skipping element since source attribte cannot be found")
         }
     }
 
@@ -227,7 +255,7 @@ impl<'a> HTMLExplorer<'a> {
     }
 
     fn get_base(&self) -> &Url {
-        self.html_base.as_ref().unwrap_or(self.request_url)
+        self.html_base.as_ref().unwrap_or(self.response_url)
     }
 }
 

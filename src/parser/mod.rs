@@ -1,8 +1,11 @@
+use std::io::Read;
+
 use crypto::digest::Digest;
 use crypto::md5::Md5;
 use hyper::client::Response;
 use hyper::header::ContentType;
 use mime::{self, Mime};
+use time;
 use url::{Url, UrlParser};
 
 use Queues;
@@ -47,13 +50,27 @@ pub fn task_parse_resource(wid: WebsiteID, mut data: Response, is_resource: bool
 
     let explored_resources = match content_type {
         Some(ContentType(Mime(mime::TopLevel::Text, mime::SubLevel::Html, _))) => {
-            html::explore_html(&mut data, queues.clone())
+            html::explore_html(wid, &mut data, queues.clone())
         }
         Some(ContentType(Mime(mime::TopLevel::Text, mime::SubLevel::Css, _))) => {
             let base_url = data.url.clone();
-            css::explore_css(&mut data, &base_url, queues.clone())
+            css::explore_css(wid, &mut data, &base_url, queues.clone())
         }
-        _ => vec![], // No more exploring, just store in DB
+        _ => {
+            // No more exploring, just store in DB
+            let mut contents = Vec::new();
+            data.read_to_end(&mut contents).unwrap();
+
+            queues.send_task(Task::Store {
+                wid: wid,
+                url: data.url.clone(),
+                contents: contents,
+                mime: content_type.map(|t: ContentType| t.0),
+                timestamp: time::get_time(),
+            });
+
+            vec![]
+        }
     };
 
     // Create new download tasks

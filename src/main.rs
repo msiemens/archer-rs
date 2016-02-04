@@ -13,6 +13,8 @@ extern crate cssparser;
 extern crate html5ever;
 extern crate hyper;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate log;
 extern crate log4rs;
 #[macro_use]
@@ -20,7 +22,7 @@ extern crate mime;
 extern crate num_cpus;
 extern crate phf;
 extern crate rand;
-// extern crate rusqlite;
+extern crate rusqlite;
 extern crate tendril;
 extern crate time;
 extern crate url;
