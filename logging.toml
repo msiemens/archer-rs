@@ -12,8 +12,12 @@ appenders = ["stdout", "debug"]
 
 [[logger]]
 name = "archer"
-level = "info"
-#level = "warn"
+level = "debug"
+#level = "info"
+
+[[logger]]
+name = "archer::parser::css"
+level = "trace"
 
 [[logger]]
 name = "html5ever"

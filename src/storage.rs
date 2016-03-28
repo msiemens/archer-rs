@@ -1,70 +1,67 @@
-use std::collections::HashMap;
-use std::path::Path;
+// use std::path::Path;
 
-use mime::Mime;
 use rusqlite::Connection;
-use time::Timespec;
 use url::Url;
 
-use Queues;
-use event::Event;
-use model::{State, Website, WebsiteID};
+use tasks::Resource;
 
 
+// DEV only: hardcoded sites to download
 const SITES: [&'static str; 3] = ["http://m-siemens.de",
-                                  "http://blog.m-siemens.de",
+                                  "http://blog.m-siemens.de/",
                                   "http://rust-lang.org/"];
 
 
-pub fn load_queued() -> HashMap<WebsiteID, Website> {
-    let mut websites = HashMap::new();
-    for (i, website) in SITES.iter().enumerate() {
-        websites.insert(WebsiteID::new(i as i32),
-                        Website {
-                            url: (*website).into(),
-                            resources_explored: 0,
-                            resources_downloaded: 0,
-                            resources_stored: 0,
-                            state: State::InProgress,
-                            explored: false,
-                        });
+pub fn resource_exists(url: &Url) -> bool {
+    with_connection(|conn| {
+        conn.query_row("SELECT EXISTS(SELECT * FROM resource WHERE url=$1)",
+                       &[&(url.serialize())],
+                       |row| row.get(0))
+    })
+        .unwrap()  // FIXME: Error handling
+}
+
+
+pub fn load_queued() -> Vec<String> {
+    let mut websites = Vec::new();
+    for website in &SITES {
+        websites.push((*website).into());
     }
 
     websites
 }
 
 
-pub fn store_resource(wid: WebsiteID,
-                      url: Url,
-                      data: Vec<u8>,
-                      mime_type: Option<Mime>,
-                      timestamp: Timespec,
-                      queues: Queues) {
-    info!("Storing resource: {}", url);
+pub fn store_resource(resource: &mut Resource) {
+    {
+        let details = resource.get_storage_details();
 
-    with_connection(|conn| {
-        // FIXME: Error handling, handle SQL_BUSY
-        let tx = try!(conn.transaction());
+        debug!("Storing resource: {}", resource.get_url());
 
-        try!(conn.execute("INSERT INTO resource (url, contents, mime, time) VALUES ($1, $2, $3, \
-                           $4)",
-                          &[&url.serialize(),
-                            &data,
-                            &mime_type.as_ref().map(|mime| format!("{}", mime)),
-                            &timestamp]));
+        with_connection(|conn| {
+            let tx = try!(conn.transaction());
 
-        tx.commit()
-    })
-        .unwrap();
+            try!(conn.execute("INSERT INTO resource (url,contents,mime,time) VALUES \
+                               ($1,$2,$3,$4)",
+                              &[&resource.get_url().serialize(),
+                                &details.contents,
+                                &details.mime.as_ref().map(|mime| format!("{}", mime)),
+                                details.timestamp]));
 
-    queues.send_event(Event::DownloadStored { wid: wid });
+            tx.commit()
+        })
+            .unwrap();  // FIXME: Error handling
+    }
+
+    resource.stored();
 }
 
 
 fn with_connection<T, F: Fn(&Connection) -> T>(f: F) -> T {
     // FIXME: Make path configurable
     thread_local! {
-        static CONNECTION: Connection = Connection::open(Path::new("archer.db")).unwrap()
+    // static CONNECTION: Connection = Connection::open(Path::new("archer.db")).unwrap()
+     static CONNECTION: Connection = Connection::open_in_memory().unwrap()
     };
 
     CONNECTION.with(|conn| {

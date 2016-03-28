@@ -1,28 +1,50 @@
-use std::io::Read;
+use std::io;
+use std::str::Utf8Error;
 
 use crypto::digest::Digest;
 use crypto::md5::Md5;
-use hyper::client::Response;
 use hyper::header::ContentType;
 use mime::{self, Mime};
-use time;
-use url::{Url, UrlParser};
+use tendril::ByteTendril;
+use url::Url;
 
-use Queues;
-use event::Event;
-use model::WebsiteID;
-use task::Task;
+use tasks::Resource;
 
 
 mod css;
 mod html;
 
 
+
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum ParserError {
+        Io(err: io::Error) {
+            from()
+            description("io error")
+            display("I/O error: {}", err)
+            cause(err)
+        }
+        Encoding {
+            from(ByteTendril)
+            from(Utf8Error)
+            description("encoding error")
+            display("Encoding error")
+        }
+        MalformedCSS {
+            description("malformed CSS")
+            display("Malformed CSS found")
+        }
+    }
+}
+
+
 fn rewrite_url(url: &Url) -> String {
     let filename = url.path().and_then(|parts| parts.last());
     let extension = filename.and_then(|f| {
         if f.contains('.') {
-            f.rsplitn(2, ".").next()
+            f.rsplitn(2, '.').next()
         } else {
             None
         }
@@ -43,55 +65,36 @@ fn rewrite_url(url: &Url) -> String {
 }
 
 
-pub fn task_parse_resource(wid: WebsiteID, mut data: Response, is_resource: bool, queues: Queues) {
+pub fn task_parse_resource(resource: &mut Resource) -> Vec<Url> {
     debug!("Parse Resource");
 
-    let content_type: Option<ContentType> = data.headers.get().cloned();
+    let content_type = resource.get_content_type();
 
-    let explored_resources = match content_type {
+    let res = match content_type {
         Some(ContentType(Mime(mime::TopLevel::Text, mime::SubLevel::Html, _))) => {
-            html::explore_html(wid, &mut data, queues.clone())
+            html::explore_html(resource)
         }
         Some(ContentType(Mime(mime::TopLevel::Text, mime::SubLevel::Css, _))) => {
-            let base_url = data.url.clone();
-            css::explore_css(wid, &mut data, &base_url, queues.clone())
+            css::explore_css(resource)
         }
         _ => {
             // No more exploring, just store in DB
-            let mut contents = Vec::new();
-            data.read_to_end(&mut contents).unwrap();
-
-            queues.send_task(Task::Store {
-                wid: wid,
-                url: data.url.clone(),
-                contents: contents,
-                mime: content_type.map(|t: ContentType| t.0),
-                timestamp: time::get_time(),
-            });
-
-            vec![]
+            Ok((resource.read_response().iter().cloned().collect(),
+                Vec::new()))
         }
     };
 
-    // Create new download tasks
-    for resource in &explored_resources {
-        queues.send_task(Task::Download {
-            wid: wid,
-            url: resource.serialize(),
-            retry: 0,
-            resource: true,
-        })
+    match res {
+        Ok((contents, urls)) => {
+            resource.parsed(contents, content_type.map(|t: ContentType| t.0));
+
+            urls
+        }
+        Err(e) => {
+            warn!("Error while parsing {}: {}", resource.get_url(), e);
+            resource.failed();
+
+            Vec::new()
+        }
     }
-
-    // Tell the main event handler we're done with processing
-    queues.send_event(Event::DownloadProcessed {
-        wid: wid,
-        resource: is_resource,
-        explored: explored_resources.len() as i32,
-    });
-}
-
-
-fn resolve_rel_url(base: &Url, url: &str) -> Option<Url> {
-    UrlParser::new().base_url(base).parse(url).ok()
 }

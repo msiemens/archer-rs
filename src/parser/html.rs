@@ -1,19 +1,13 @@
 use std::mem;
 
-use html5ever::{self, one_input, serialize, Attribute};
+use html5ever::{parse_document, serialize, Attribute};
 use html5ever::rcdom::{Element, Handle, RcDom};
-use hyper::client::Response;
-use hyper::header::ContentType;
-use mime::Mime;
 use phf;
-use tendril::{ByteTendril, ReadExt};
-use time;
-use url::Url;
+use tendril::TendrilSink;
+use url::{Url, UrlParser};
 
-use Queues;
-use model::WebsiteID;
-use parser::{css, resolve_rel_url, rewrite_url};
-use task::Task;
+use parser::{css, rewrite_url, ParserError};
+use tasks::Resource;
 
 
 macro_rules! html_rule {
@@ -70,67 +64,46 @@ static HTML_RULES: phf::Map<&'static str, HTMLRule> = phf_map! {
 };
 
 
-pub fn explore_html(wid: WebsiteID, data: &mut Response, queues: Queues) -> Vec<Url> {
-    // FIXME: Figure out error handling. What does Servo do?
-    let mut input = ByteTendril::new();
-    data.read_to_tendril(&mut input).unwrap();
-    let input = input.try_reinterpret().unwrap();
-    let dom: RcDom = html5ever::parse(one_input(input), Default::default());
+pub fn explore_html(resource: &mut Resource) -> Result<(Vec<u8>, Vec<Url>), ParserError> {
+    let mut input = Vec::new();
+    input.extend_from_slice(resource.read_response());
 
-    let explorer = HTMLExplorer::new(wid,
-                                     dom,
-                                     &data.url,
-                                     data.headers.get().cloned().map(|t: ContentType| t.0),
-                                     queues);
+    let dom = parse_document(RcDom::default(), Default::default())
+                  .from_utf8()
+                  .read_from(&mut input.as_slice())
+                  .unwrap();
+
+    let explorer = HTMLExplorer::new(dom, resource);
     explorer.explore()
 }
 
 
 struct HTMLExplorer<'a> {
-    wid: WebsiteID,
+    resource: &'a mut Resource,
     dom: RcDom,
-    response_url: &'a Url,
-    mime: Option<Mime>,
     html_base: Option<Url>,
     explored_resources: Vec<Url>,
-    queues: Queues,
 }
 
 impl<'a> HTMLExplorer<'a> {
-    fn new(wid: WebsiteID,
-           dom: RcDom,
-           response_url: &Url,
-           mime: Option<Mime>,
-           queues: Queues)
-           -> HTMLExplorer {
+    fn new(dom: RcDom, resource: &'a mut Resource) -> Self {
         HTMLExplorer {
-            wid: wid,
+            resource: resource,
             dom: dom,
-            response_url: response_url,
-            mime: mime,
             html_base: None,
             explored_resources: Vec::new(),
-            queues: queues,
         }
     }
 
-    fn explore(mut self) -> Vec<Url> {
+    fn explore(mut self) -> Result<(Vec<u8>, Vec<Url>), ParserError> {
         let root = self.dom.document.clone();
         self.walk_dom(root);
 
         // FIXME: Store rewritten HTML
         let mut contents = Vec::new();
-        serialize(&mut contents, &self.dom.document, Default::default()).unwrap();
+        try!(serialize(&mut contents, &self.dom.document, Default::default()));
 
-        self.queues.send_task(Task::Store {
-            wid: self.wid,
-            url: self.response_url.clone(),
-            contents: contents,
-            mime: self.mime,
-            timestamp: time::get_time(),
-        });
-
-        self.explored_resources
+        Ok((contents, self.explored_resources))
     }
 
     fn walk_dom(&mut self, handle: Handle) {
@@ -171,26 +144,36 @@ impl<'a> HTMLExplorer<'a> {
     ///   ignored.
     fn handle_base_tag(&mut self, attrs: &[Attribute]) {
         // Search for "href" attribute and set html_base if found
+
+        // FIXME: What happens if a fully qualified base has already been set?
         if let Some(attr) = attrs.iter()
                                  .find(|attr| &*(attr.name.local) == "href") {
-            let base = self.resolve_url(&*attr.value);
-            if base.is_none() {
-                warn!("Failed to resolve <base href=\"{}\"> with respect to {}",
-                      &*attr.value,
-                      self.get_base())
-            }
+            let base = match UrlParser::new().base_url(self.get_base()).parse(&*attr.value) {
+                Ok(base) => base,
+                Err(_) => {
+                    warn!("Failed to resolve <base href=\"{}\"> with respect to {}",
+                          &*attr.value,
+                          self.get_base());
+                    return;
+                }
+            };
 
             // FIXME: Rewrite URL. What directory to use?
 
-            mem::replace(&mut self.html_base, base);
+            mem::replace(&mut self.html_base, Some(base));
         }
     }
 
     fn handle_inline_styles(&mut self, attr: &Attribute) {
-        let new_urls = css::explore_css(self.wid,
-                                        &mut (*attr.value).as_bytes(),
-                                        self.get_base(),
-                                        self.queues.clone());
+        let new_urls = match css::explore_inline_css(&(*attr.value).as_bytes(), self.get_base()) {
+            Ok(urls) => urls,
+            Err(e) => {
+                warn!("Error while parsing inline CSS in {}: {}",
+                      self.resource.get_url(),
+                      e);
+                return;
+            }
+        };
         self.explored_resources.extend(new_urls.into_iter());
     }
 
@@ -228,15 +211,15 @@ impl<'a> HTMLExplorer<'a> {
 
                 debug!("New source from <{}>: {:?}", name, source);
 
-                match self.resolve_url(&source) {
-                    Some(url) => {
+                match UrlParser::new().base_url(self.get_base()).parse(&source) {
+                    Ok(url) => {
                         // Rewrite URL
                         mem::replace(&mut attr.value, rewrite_url(&url).into());
 
                         // Update explored resources
                         self.explored_resources.push(url);
                     }
-                    None => {
+                    Err(_) => {
                         warn!("Failed to resolve URL {} with respect to {}",
                               source,
                               self.get_base())
@@ -250,12 +233,8 @@ impl<'a> HTMLExplorer<'a> {
         }
     }
 
-    fn resolve_url(&self, url: &str) -> Option<Url> {
-        resolve_rel_url(self.get_base(), url)
-    }
-
     fn get_base(&self) -> &Url {
-        self.html_base.as_ref().unwrap_or(self.response_url)
+        self.html_base.as_ref().unwrap_or(&self.resource.get_response_url())
     }
 }
 

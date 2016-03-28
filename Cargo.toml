@@ -3,27 +3,36 @@ name = "archer"
 version = "0.1.0"
 authors = ["Markus Siemens <markus@m-siemens.de>"]
 
-[profile.release]
-opt-level = 3
-debug = true
-
 [dependencies]
-chan = "~0.1.14"
-cssparser = "~0.4.0"
-html5ever = "~0.2.11"
-hyper = "~0.7.2"
-lazy_static = "0.1.*"
-log = "~0.3"
-log4rs = "~0.3.3"
-rusqlite = "~0.6.0"
-mime = "~0.1.1"
-num_cpus = "~0.2"
-phf = "~0.7.10"
-phf_macros = "~0.7.10"
-rand = "~0.3"
-rust-crypto = "~0.2.34"
-tendril = "~0.1.6"
-time = "~0.1.0"
-url = "~0.5.2"
+chan = "0.1.17"
+clippy = "0.0.58"
+cssparser = "0.5.5"
+daggy = "0.4.0"
+html5ever = "0.5.3"
+hyper = "0.8.0"
+iron = "0.3.0"
+lazy_static = "0.1.15"
+log = "0.3.5"
+log4rs = "0.3.3"
+logger = "0.0.3"
+mime = "0.2.0"
+mount = "0.1.0"
+num_cpus = "0.2.11"
+peg = "0.3.10"
+phf = "0.7.13"
+phf_macros = "0.7.13"
+quick-error = "1.0.0"
+rand = "0.3.14"
+router = "0.1.1"
+rusqlite = "0.6.0"
+rust-crypto = "0.2.34"
+scoped_threadpool = "0.1.7"
+staticfile = "0.2.0"
+tendril = "0.2.2"
+time = "0.1.34"
+url = "0.5.7"
 
-clippy = "*"
+[dependencies.clap]
+version = "2.2.2"
+default-features = false
+features = ["suggestions", "unstable"]
