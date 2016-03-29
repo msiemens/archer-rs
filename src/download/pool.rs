@@ -1,4 +1,3 @@
-use std::sync::mpsc;  // FIXME: Use chan and select! {}
 use std::thread;
 
 use chan;
@@ -27,15 +26,15 @@ pub struct Download {
 pub struct DownloadPool {
     task_send: chan::Sender<Task>,
     task_recv: chan::Receiver<Task>,
-    results_send: mpsc::Sender<Download>,
-    results_recv: mpsc::Receiver<Download>,
+    results_send: chan::Sender<Download>,
+    results_recv: chan::Receiver<Download>,
     thread_count: u32,
 }
 
 impl DownloadPool {
     pub fn new(thread_count: u32) -> DownloadPool {
         let (task_send, task_recv) = chan::async();
-        let (results_send, results_recv) = mpsc::channel();
+        let (results_send, results_recv) = chan::async();
 
         DownloadPool {
             task_send: task_send,
@@ -69,10 +68,9 @@ impl DownloadPool {
                                tid);
 
                         result_send.send(Download {
-                                       idx: task.idx,
-                                       result: result,
-                                   })
-                                   .unwrap();
+                            idx: task.idx,
+                            result: result,
+                        });
                     }
                 })
                 .unwrap();
@@ -90,8 +88,18 @@ impl DownloadPool {
     pub fn get_results(&mut self) -> Vec<Download> {
         let mut results = Vec::new();
 
-        while let Ok(result) = self.results_recv.try_recv() {
-            results.push(result);
+        loop {
+            let chan = &self.results_recv;
+            chan_select! {
+                default => {
+                    break
+                },
+                chan.recv() -> result => {
+                    if let Some(result) = result {
+                        results.push(result);
+                    }
+                },
+            }
         }
 
         results
