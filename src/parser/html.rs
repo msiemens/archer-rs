@@ -237,5 +237,5 @@ impl<'a> HTMLExplorer<'a> {
 }
 
 
-// FIXME: Test for <base> handling
-// FIXME: Test for lowercase/uppercase/mixed case tag and attr handling
+// TODO: Test for <base> handling
+// TODO: Test for lowercase/uppercase/mixed case tag and attr handling

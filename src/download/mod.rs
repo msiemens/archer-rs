@@ -58,7 +58,7 @@ pub enum DownloadResult {
 
 pub fn download_url(try: i32, url: &Url) -> DownloadResult {
     // FIXME: Handling of redirects
-    // FIXME: Handling of gzipped content
+    // TODO: Request gzipped content
     // TODO: Add user-agent header
     // TODO: robots.txt handling?
 

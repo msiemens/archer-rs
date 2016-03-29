@@ -58,7 +58,7 @@ pub fn store_resource(resource: &mut Resource) {
 
 
 fn with_connection<T, F: Fn(&Connection) -> T>(f: F) -> T {
-    // FIXME: Make path configurable
+    // TODO: Make path configurable
     thread_local! {
     // static CONNECTION: Connection = Connection::open(Path::new("archer.db")).unwrap()
      static CONNECTION: Connection = Connection::open_in_memory().unwrap()

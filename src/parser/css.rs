@@ -122,8 +122,8 @@ fn process_css(input: &str, base: &Url) -> Result<(String, Vec<Url>), ParserErro
 }
 
 
-// FIXME: Tests for @import
-// FIXME: Tests for url('...')
+// TODO: Tests for @import
+// TODO: Tests for url('...')
 
 #[cfg(test)]
 mod test {
