@@ -56,13 +56,13 @@ pub enum DownloadResult {
 }
 
 
-pub fn download_url(try: i32, url: Url) -> DownloadResult {
+pub fn download_url(try: i32, url: &Url) -> DownloadResult {
     // FIXME: Handling of redirects
     // FIXME: Handling of gzipped content
     // TODO: Add user-agent header
     // TODO: robots.txt handling?
 
-    if storage::resource_exists(&url) {
+    if storage::resource_exists(url) {
         debug!("Resource {:?} already downloaded, skipping", url);
         return DownloadResult::Skip;
     }

@@ -62,7 +62,7 @@ impl DownloadPool {
 
                         debug!("Downloading {} ({:?}) on thread {}", url, task.idx, tid);
 
-                        let result = download::download_url(task.try, task.url);
+                        let result = download::download_url(task.try, &task.url);
                         debug!("Finished download of {} ({:?}) on thread {}",
                                url,
                                task.idx,

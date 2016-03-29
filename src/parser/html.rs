@@ -32,7 +32,8 @@ macro_rules! html_rule {
 
 #[derive(Debug)]
 struct HTMLRule {
-    /// Which attributes are required for the rule to match (logical OR)
+    /// Which attributes+values are required for the rule to match (logical OR)
+    /// E.g. `rel="stylesheet" OR rel="shortcut icon"`
     required: &'static [(&'static str, &'static str)],
 
     /// The source of the explored resource
@@ -65,12 +66,9 @@ static HTML_RULES: phf::Map<&'static str, HTMLRule> = phf_map! {
 
 
 pub fn explore_html(resource: &mut Resource) -> Result<(Vec<u8>, Vec<Url>), ParserError> {
-    let mut input = Vec::new();
-    input.extend_from_slice(resource.read_response());
-
     let dom = parse_document(RcDom::default(), Default::default())
                   .from_utf8()
-                  .read_from(&mut input.as_slice())
+                  .read_from(&mut resource.read_response())
                   .unwrap();
 
     let explorer = HTMLExplorer::new(dom, resource);
