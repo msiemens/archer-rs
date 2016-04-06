@@ -2,6 +2,7 @@
 name = "archer"
 version = "0.1.0"
 authors = ["Markus Siemens <markus@m-siemens.de>"]
+build = "build.rs"
 
 [dependencies]
 chan = "0.1.17"
@@ -36,3 +37,8 @@ url = "0.5.7"
 version = "2.2.2"
 default-features = false
 features = ["suggestions", "unstable"]
+
+[build-dependencies]
+mime_guess = "1.6.0"
+serde = "0.7.0"
+serde_json = "0.7.0"

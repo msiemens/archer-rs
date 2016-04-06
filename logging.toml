@@ -16,7 +16,7 @@ level = "debug"
 #level = "info"
 
 [[logger]]
-name = "archer::parser::css"
+name = "archer::download"
 level = "trace"
 
 [[logger]]

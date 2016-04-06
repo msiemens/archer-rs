@@ -79,8 +79,7 @@ pub fn task_parse_resource(resource: &mut Resource) -> Vec<Url> {
         }
         _ => {
             // No more exploring, just store in DB
-            Ok((resource.read_response().iter().cloned().collect(),
-                Vec::new()))
+            Ok((resource.read_response().iter().cloned().collect(), Vec::new()))
         }
     };
 

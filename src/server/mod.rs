@@ -1,4 +1,5 @@
 use std::io::Error as IoError;
+#[cfg(not(release))]
 use std::path::Path;
 
 use iron::{status, AfterMiddleware};
@@ -7,6 +8,7 @@ use logger::Logger;
 use logger::format::Format;
 use mount::Mount;
 use router::{Router, NoRoute};
+#[cfg(not(release))]
 use staticfile::Static;
 
 
@@ -33,6 +35,16 @@ impl AfterMiddleware for Custom404 {
 }
 
 
+#[cfg(release)]
+fn get_assets_router() -> Router {
+    include!(concat!(env!("OUT_DIR"), "/server_assets.rs"));
+}
+
+
+#[cfg(not(release))]
+fn get_assets_router() -> Static {
+    Static::new(Path::new("public/"))
+}
 
 pub fn run() {
     let addr = "localhost:3000";
@@ -46,7 +58,7 @@ pub fn run() {
     // Static files
     let mut mount = Mount::new();
     mount.mount("/api", router);
-    mount.mount("/", Static::new(Path::new("public/")));
+    mount.mount("/", get_assets_router());
 
     // Logging
     let mut chain = Chain::new(mount);

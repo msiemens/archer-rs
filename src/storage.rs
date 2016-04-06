@@ -1,4 +1,4 @@
-// use std::path::Path;
+use std::path::Path;
 
 use rusqlite::Connection;
 use url::Url;
@@ -57,11 +57,23 @@ pub fn store_resource(resource: &mut Resource) {
 }
 
 
+pub fn purge_resources() {
+    with_connection(|conn| {
+        let tx = try!(conn.transaction());
+
+        try!(conn.execute("DROP TABLE IF EXISTS resource", &[]));
+
+        tx.commit()
+    })
+        .unwrap();
+}
+
+
 fn with_connection<T, F: Fn(&Connection) -> T>(f: F) -> T {
     // TODO: Make path configurable
     thread_local! {
-    // static CONNECTION: Connection = Connection::open(Path::new("archer.db")).unwrap()
-     static CONNECTION: Connection = Connection::open_in_memory().unwrap()
+        static CONNECTION: Connection = Connection::open(Path::new("archer.db")).unwrap()
+    //  static CONNECTION: Connection = Connection::open_in_memory().unwrap()
     };
 
     CONNECTION.with(|conn| {

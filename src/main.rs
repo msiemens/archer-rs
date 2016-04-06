@@ -8,6 +8,7 @@
 #![plugin(peg_syntax_ext)]
 #![plugin(phf_macros)]
 
+#[macro_use]
 extern crate chan;
 #[macro_use]
 extern crate clap;
@@ -70,6 +71,9 @@ fn main() {
         // Set up website map
         // TODO: Replace with db access
         let websites = storage::load_queued();
+
+        // TODO: Remove
+        storage::purge_resources();
 
         // Go!
         // TODO: The CPU count might be not the best heuristic here...
