@@ -3,6 +3,8 @@ import { connect } from 'react-redux';
 
 import Navigation from 'app/components/Navigation';
 
+import 'semantic-ui/dist/semantic.js';
+
 
 export class App extends React.Component {
   static propTypes = {

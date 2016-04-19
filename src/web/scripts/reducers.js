@@ -3,7 +3,7 @@
 import { combineReducers } from 'redux-immutable';
 
 // import helpers from './helpers/reducer';
-// import wheelchair from './equipment/wheelchairs/reducer';
+import overview from './overview/reducer';
 import { route } from './app/reducer';
 
 
@@ -13,8 +13,7 @@ import { route } from './app/reducer';
 
 
 export default combineReducers({
-  // wheelchair,
-  // helpers,
+  overview,
   route,
   // form: immutableize(form)
 });

@@ -3,24 +3,28 @@ use std::io::Error as IoError;
 use std::path::Path;
 
 use iron::{status, AfterMiddleware};
+use iron::modifiers::Header;
+use hyper::header::{AccessControlAllowOrigin, ContentType};
 use iron::prelude::*;
 use logger::Logger;
 use logger::format::Format;
 use mount::Mount;
-use router::{Router, NoRoute};
+use router::NoRoute;
 #[cfg(not(release))]
 use staticfile::Static;
 
 
-fn handler(_: &mut Request) -> IronResult<Response> {
-    Ok(Response::with((status::Ok, "Hello API")))
-}
-
+mod overview;
 
 
 struct Custom404;
 
 impl AfterMiddleware for Custom404 {
+    // For webpack-dev-server which runs on another port
+    fn after(&self, _: &mut Request, res: Response) -> IronResult<Response> {
+        Ok(res.set((Header(AccessControlAllowOrigin::Any), Header(ContentType::json()))))
+    }
+
     fn catch(&self, _: &mut Request, err: IronError) -> IronResult<Response> {
         if let Some(_) = err.error.downcast::<IoError>() {
             return Ok(Response::with((status::NotFound, "Not Found")));
@@ -52,12 +56,12 @@ pub fn run() {
     info!("Starting server at {}", addr);
 
     // Router
-    let mut router = Router::new();
-    router.get("/", handler);
+    // let mut router = Router::new();
+    // router.get("/", handler);
 
     // Static files
     let mut mount = Mount::new();
-    mount.mount("/api", router);
+    mount.mount("/api/overview", overview::get_router());
     mount.mount("/", get_assets_router());
 
     // Logging

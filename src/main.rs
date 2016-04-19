@@ -1,12 +1,13 @@
 // TODO: Profile with coz
 // TODO: Figure out user interface
 
-
+#![feature(custom_derive)]
 #![feature(box_patterns)]
 #![feature(plugin)]
 #![plugin(clippy)]
 #![plugin(peg_syntax_ext)]
 #![plugin(phf_macros)]
+#![plugin(serde_macros)]
 
 #[macro_use]
 extern crate chan;
@@ -35,6 +36,8 @@ extern crate rand;
 extern crate router;
 extern crate rusqlite;
 extern crate scoped_threadpool;
+extern crate serde;
+extern crate serde_json;
 extern crate staticfile;
 extern crate tendril;
 extern crate time;
