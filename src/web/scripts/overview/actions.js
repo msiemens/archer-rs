@@ -5,15 +5,11 @@ import { createAction } from 'redux-actions';
 import { API_ROOT } from 'consts';
 
 
-export function fetchOverview(filter=null) {
+export function fetchOverview() {
   let url = `${API_ROOT}/overview`;
 
-  if (filter !== null) {
-    url += `?tag=${filter}`;
-  }
-
   return [
-    overviewFetchStart(filter),
+    overviewFetchStart(),
     bind(
       fetch(url, {
         method: 'GET'
@@ -27,3 +23,5 @@ export function fetchOverview(filter=null) {
 export const overviewFetchStart = createAction('OVERVIEW_FETCH_START');
 export const overviewFetchSuccess = createAction('OVERVIEW_FETCH_SUCCESS');
 export const overviewFetchFailure = createAction('OVERVIEW_FETCH_FAILURE');
+
+export const setFilter = createAction('OVERVIEW_SET_FILTER');

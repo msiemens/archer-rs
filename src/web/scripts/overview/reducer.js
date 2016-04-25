@@ -15,10 +15,12 @@ export const DEFAULT_STATE = Immutable.fromJS({
 
 
 export default handleActions({
-  'OVERVIEW_FETCH_START': (state, {payload}) => state.mergeDeep({
+  'OVERVIEW_SET_FILTER': (state, {payload: filter}) => state.mergeDeep({
+    ui: { filter }
+  }),
+  'OVERVIEW_FETCH_START': (state) => state.mergeDeep({
     ui: {
       status: FetchStatus.LOADING,
-      filter: payload
     }
   }),
   'OVERVIEW_FETCH_SUCCESS': (state, action) => state.mergeDeep({

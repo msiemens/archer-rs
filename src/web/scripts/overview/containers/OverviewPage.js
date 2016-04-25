@@ -3,7 +3,7 @@ import Helmet from 'react-helmet';
 import { connect } from 'react-redux';
 
 import { FetchStatus, TITLE_TEMPLATE } from 'consts';
-import { fetchOverview } from '../actions';
+import { fetchOverview, setFilter } from '../actions';
 
 
 export class OverviewPage extends React.Component {
@@ -18,7 +18,7 @@ export class OverviewPage extends React.Component {
   componentDidMount() {
     jQuery('#filter').dropdown({
       onChange: (value) => {
-        this.props.dispatch(fetchOverview(value));
+        this.props.dispatch(setFilter(value));
       }
     });
   }
@@ -94,6 +94,9 @@ export class OverviewPage extends React.Component {
           <i className='filter icon'></i>
           <span className='text'>Filter by Tag</span>
           <div className='menu'>
+            <div className='item' data-value=''>
+              Show All
+            </div>
             {tags}
           </div>
         </div>
@@ -111,7 +114,13 @@ function mapStateToProps(state) {
   state = state.toJS()['overview'];
 
   if (state.ui.status == FetchStatus.SUCCESS) {
-    state.data.websites = state.data.websites.map((website) => ({
+    state.data.websites = state.data.websites.filter((website) => {
+      if (state.ui.filter != null && state.ui.filter != '') {
+        return website.tags.indexOf(parseInt(state.ui.filter, 10)) != -1;
+      } else {
+        return true;
+      }
+    }).map((website) => ({
       title: website.title,
       url: website.url,
       tags: website.tags.map((tagId) => state.data.tags[tagId])
