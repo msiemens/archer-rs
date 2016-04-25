@@ -74,7 +74,20 @@ export class OverviewPage extends React.Component {
         </div>);
         break;
       case FetchStatus.SUCCESS:
-        contents = this.renderOverview(data.websites);
+        if (data.websites.length > 0) {
+          contents = this.renderOverview(data.websites);
+        } else {
+          contents = (<div className='ui icon message'>
+            <i className='circle notched icon'></i>
+            <div className='content'>
+              <div className='header'>
+                No websites
+              </div>
+              No websites have been downloaded/queued yet.
+            </div>
+          </div>);
+        }
+
         tags = Object.keys(data.tags).map((i) => {
           const tag = data.tags[i];
 

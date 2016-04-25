@@ -14,7 +14,7 @@ use router::NoRoute;
 use staticfile::Static;
 
 
-mod overview;
+pub mod overview;
 
 
 struct Custom404;
