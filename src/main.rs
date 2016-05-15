@@ -9,6 +9,7 @@
 #![plugin(phf_macros)]
 #![plugin(serde_macros)]
 
+extern crate bodyparser;
 #[macro_use]
 extern crate chan;
 #[macro_use]

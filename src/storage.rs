@@ -26,13 +26,27 @@ pub fn resource_exists(url: &Url) -> bool {
 
 pub fn load_queued() -> Vec<String> {
     with_connection(|conn| {
-        let mut stmt = conn.prepare("SELECT url FROM websites WHERE downloaded = 0").unwrap();
+        let mut stmt = conn.prepare("SELECT url FROM queued").unwrap();
 
         stmt.query_map(&[], |row| row.get::<String>(0))
             .unwrap()
             .map(Result::unwrap)
             .collect()
     })
+}
+
+
+pub fn enqueue_website(title: String, url: String, tags: String) {
+    with_connection(|conn| {
+        conn.execute("INSERT INTO queued (title,url,tags) VALUES ($1,$2,$3)", &[&title, &url, &tags]).unwrap();
+    });
+}
+
+
+pub fn enqueue_resource(url: String) {
+    with_connection(|conn| {
+        conn.execute("INSERT INTO queued (url) VALUES ($1)", &[&url]).unwrap();
+    });
 }
 
 
@@ -72,25 +86,27 @@ pub fn get_overview() -> OverviewData {
         // Get tags
         let mut stmt = conn.prepare("SELECT id, name, color FROM tags").unwrap();
         stmt.query_map(&[], |row| {
-                tags.insert(row.get::<String>(0),
+                tags.insert(row.get::<i32>(0).to_string(),
                             TagData {
                                 name: row.get(1),
                                 color: row.get(2),
                             })
             })
-            .unwrap();
+            .unwrap()
+            .count();
 
         // Get websites
-        let mut stmt = conn.prepare("SELECT id, url FROM websites").unwrap();
+        let mut stmt = conn.prepare("SELECT id, title, url FROM websites").unwrap();
         stmt.query_map(&[], |row| {
                 websites.insert(row.get::<i32>(0),
                                 WebsiteData {
-                                    title: "".into(),
-                                    url: row.get(1),
+                                    title: row.get(1),
+                                    url: row.get(2),
                                     tags: Vec::new(),
                                 })
             })
-            .unwrap();
+            .unwrap()
+            .count();
 
         // For every website: get associated tags
         for (id, website) in &mut websites {
@@ -129,10 +145,20 @@ fn with_connection<T, F: Fn(&Connection) -> T>(f: F) -> T {
             .unwrap();
 
         conn.execute(r"
+            CREATE TABLE IF NOT EXISTS queued (
+              id       INTEGER PRIMARY KEY,
+              url      TEXT NOT NULL,
+              title    TEXT,
+              tags     TEXT
+              )",
+                     &[])
+            .unwrap();
+
+        conn.execute(r"
             CREATE TABLE IF NOT EXISTS websites (
               id         INTEGER PRIMARY KEY,
               url        TEXT NOT NULL,
-              downloaded BOOLEAN NOT NULL
+              title      TEXT NOT NULL
               )",
                      &[])
             .unwrap();

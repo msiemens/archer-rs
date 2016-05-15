@@ -20,8 +20,31 @@ export function fetchOverview() {
   ];
 }
 
-export const overviewFetchStart = createAction('OVERVIEW_FETCH_START');
-export const overviewFetchSuccess = createAction('OVERVIEW_FETCH_SUCCESS');
-export const overviewFetchFailure = createAction('OVERVIEW_FETCH_FAILURE');
+const overviewFetchStart = createAction('OVERVIEW_FETCH_START');
+const overviewFetchSuccess = createAction('OVERVIEW_FETCH_SUCCESS');
+const overviewFetchFailure = createAction('OVERVIEW_FETCH_FAILURE');
 
 export const setFilter = createAction('OVERVIEW_SET_FILTER');
+
+
+export function enqueueWebsite(data) {
+  return [
+    overviewEnqueueWebsiteStart(),
+    bind(
+      fetch(`${API_ROOT}/overview`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: data
+      }),
+      () => overviewEnqueueWebsiteSuccess(),
+      ({status, statusText}) => overviewEnqueueWebsiteFailure({status, statusText})
+    )
+  ];
+}
+
+const overviewEnqueueWebsiteStart = createAction('OVERVIEW_ENQUEUE_WEBSITE_START');
+const overviewEnqueueWebsiteSuccess = createAction('OVERVIEW_ENQUEUE_WEBSITE_SUCCESS');
+const overviewEnqueueWebsiteFailure = createAction('OVERVIEW_ENQUEUE_WEBSITE_FAILURE');

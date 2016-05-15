@@ -5,6 +5,7 @@ authors = ["Markus Siemens <markus@m-siemens.de>"]
 build = "build.rs"
 
 [dependencies]
+bodyparser = "0.3.0"
 chan = "0.1.17"
 clippy = "0.0.63"
 cssparser = "0.5.5"

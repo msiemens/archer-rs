@@ -3,7 +3,8 @@ import Helmet from 'react-helmet';
 import { connect } from 'react-redux';
 
 import { FetchStatus, TITLE_TEMPLATE } from 'consts';
-import { fetchOverview, setFilter } from '../actions';
+import { fetchOverview, setFilter, enqueueWebsite } from '../actions';
+import EnqueueWebsiteDialog from '../components/EnqueueWebsiteDialog';
 
 
 export class OverviewPage extends React.Component {
@@ -16,7 +17,7 @@ export class OverviewPage extends React.Component {
   }
 
   componentDidMount() {
-    jQuery('#filter').dropdown({
+    jQuery(this.filter).dropdown({
       onChange: (value) => {
         this.props.dispatch(setFilter(value));
       }
@@ -24,7 +25,7 @@ export class OverviewPage extends React.Component {
   }
 
   componentDidUpdate() {
-    jQuery('#filter').dropdown('refresh');
+    jQuery(this.filter).dropdown('refresh');
   }
 
   renderOverview(websites) {
@@ -56,7 +57,7 @@ export class OverviewPage extends React.Component {
 
   render() {
     const { data, status, error } = this.props;
-    let contents, tags;
+    let contents, tags, enqueueWebsiteDialog;
 
     switch (status) {
       case FetchStatus.LOADING:
@@ -74,6 +75,9 @@ export class OverviewPage extends React.Component {
         </div>);
         break;
       case FetchStatus.SUCCESS:
+        enqueueWebsiteDialog = (<EnqueueWebsiteDialog tags={data.tags}
+                                                      onEnqueue={(data) => this.props.dispatch(enqueueWebsite(data))} />);
+
         if (data.websites.length > 0) {
           contents = this.renderOverview(data.websites);
         } else {
@@ -92,7 +96,7 @@ export class OverviewPage extends React.Component {
           const tag = data.tags[i];
 
           return (<div key={tag.name} className='item' data-value={i}>
-            <div className={'ui empty circular label ' + (tag.color || '')}></div>
+            <div className={'ui empty circular label ' + (tag.color || '')}></div> {' '}
             {tag.name}
           </div>);
         });
@@ -103,7 +107,9 @@ export class OverviewPage extends React.Component {
       <div>
         <Helmet title='Overview' titleTemplate={TITLE_TEMPLATE}/>
 
-        <div className='ui floating dropdown button labeled icon' id='filter'>
+        {enqueueWebsiteDialog}
+
+        <div className='ui floating dropdown button labeled icon' ref={(node) => this.filter = node}>
           <i className='filter icon'></i>
           <span className='text'>Filter by Tag</span>
           <div className='menu'>

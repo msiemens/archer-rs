@@ -6,6 +6,7 @@ import { browserHistory, Router, Route, IndexRoute } from 'react-router';
 import { syncHistoryWithStore } from 'react-router-redux';
 
 import 'expose?$!expose?jQuery!jquery';
+import 'jquery-serializejson';
 import 'semantic-ui/dist/semantic.css';
 import 'semantic-ui/dist/semantic.js';
 
